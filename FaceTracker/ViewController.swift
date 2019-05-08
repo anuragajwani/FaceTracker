@@ -15,6 +15,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     private let captureSession = AVCaptureSession()
     private lazy var previewLayer = AVCaptureVideoPreviewLayer(session: self.captureSession)
     private let videoDataOutput = AVCaptureVideoDataOutput()
+    private var drawings: [CAShapeLayer] = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -71,14 +72,33 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     private func detectFace(in image: CVPixelBuffer) {
         let faceDetectionRequest = VNDetectFaceLandmarksRequest(completionHandler: { (request: VNRequest, error: Error?) in
             DispatchQueue.main.async {
-                if let results = request.results as? [VNFaceObservation], results.count > 0 {
-                    print("did detect \(results.count) face(s)")
+                if let results = request.results as? [VNFaceObservation] {
+                    self.handleFaceDetectionResults(results)
                 } else {
-                    print("did not detect any face")
+                    self.clearDrawings()
                 }
             }
         })
         let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: image, orientation: .leftMirrored, options: [:])
         try? imageRequestHandler.perform([faceDetectionRequest])
+    }
+    
+    private func handleFaceDetectionResults(_ observedFaces: [VNFaceObservation]) {
+        self.clearDrawings()
+        let facesBoundingBoxes: [CAShapeLayer] = observedFaces.map({ (observedFace: VNFaceObservation) -> CAShapeLayer in
+            let faceBoundingBoxOnScreen = self.previewLayer.layerRectConverted(fromMetadataOutputRect: observedFace.boundingBox)
+            let faceBoundingBoxPath = CGPath(rect: faceBoundingBoxOnScreen, transform: nil)
+            let faceBoundingBoxShape = CAShapeLayer()
+            faceBoundingBoxShape.path = faceBoundingBoxPath
+            faceBoundingBoxShape.fillColor = UIColor.clear.cgColor
+            faceBoundingBoxShape.strokeColor = UIColor.green.cgColor
+            return faceBoundingBoxShape
+        })
+        facesBoundingBoxes.forEach({ faceBoundingBox in self.view.layer.addSublayer(faceBoundingBox) })
+        self.drawings = facesBoundingBoxes
+    }
+    
+    private func clearDrawings() {
+        self.drawings.forEach({ drawing in drawing.removeFromSuperlayer() })
     }
 }
